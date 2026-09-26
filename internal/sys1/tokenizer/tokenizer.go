@@ -1,13 +1,18 @@
 package tokenizer
 
 /*
-#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/lib/darwin_arm64 -framework CoreFoundation -framework Security
-#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/lib/darwin_amd64 -framework CoreFoundation -framework Security
-#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/lib/linux_amd64
-#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/lib/linux_arm64
+#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/lib/darwin_arm64 -ltokenizers -lm -lstdc++ -framework CoreFoundation -framework Security
+#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/lib/darwin_amd64 -ltokenizers -lm -lstdc++ -framework CoreFoundation -framework Security
+#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/lib/linux_amd64 -ltokenizers -ldl -lm -lstdc++
+#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/lib/linux_arm64 -ltokenizers -ldl -lm -lstdc++
+
+#include <stdlib.h>
+#include "tokenizers.h"
+
+extern void tokenizers_version_1_26_0(void);
+static void (*tokenizers_version_check)(void) = &tokenizers_version_1_26_0;
 */
 import "C"
-
 
 import (
 	"encoding/json"
@@ -15,8 +20,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	hf "github.com/daulet/tokenizers"
+	"sync"
+	"unsafe"
 )
 
 var (
@@ -35,9 +40,10 @@ type Tokenizer interface {
 	Close() error
 }
 
-// HFTokenizer wraps Hugging Face's Rust tokenizers engine.
+// HFTokenizer wraps Hugging Face's Rust tokenizers engine directly via Cgo.
 type HFTokenizer struct {
-	inner       *hf.Tokenizer
+	mu          sync.Mutex
+	handle      unsafe.Pointer
 	clsTokenID  int64
 	sepTokenID  int64
 	maskTokenID int64
@@ -56,13 +62,22 @@ func NewHFTokenizer(modelDir string) (*HFTokenizer, error) {
 		}
 	}
 
-	raw, err := hf.FromFile(tokPath)
-	if err != nil {
-		return nil, fmt.Errorf("golaya: failed to load tokenizer from %s: %w", tokPath, err)
+	cPath := C.CString(tokPath)
+	defer C.free(unsafe.Pointer(cPath))
+
+	var errPtr *C.char
+	handle := C.tokenizers_from_file(cPath, &errPtr)
+	if handle == nil {
+		if errPtr != nil {
+			errStr := C.GoString(errPtr)
+			C.tokenizers_free_string(errPtr)
+			return nil, fmt.Errorf("golaya: failed to load tokenizer: %s", errStr)
+		}
+		return nil, fmt.Errorf("golaya: failed to load tokenizer from %s", tokPath)
 	}
 
 	t := &HFTokenizer{
-		inner:       raw,
+		handle:      handle,
 		clsTokenID:  50281, // Default ModernBERT/mmBERT fallback
 		sepTokenID:  50282,
 		padTokenID:  50283,
@@ -99,39 +114,73 @@ func (t *HFTokenizer) resolveSpecialTokensViaEncode() {
 		"[MASK]": &t.maskTokenID,
 	}
 	for str, idPtr := range tokens {
-		ids, _, err := t.inner.EncodeErr(str, false)
+		ids, err := t.encodeRaw(str, false)
 		if err == nil && len(ids) == 1 {
-			*idPtr = int64(ids[0])
+			*idPtr = ids[0]
 		}
 	}
 }
 
-// Encode encodes a string to token IDs.
-func (t *HFTokenizer) Encode(text string, addSpecialTokens bool) ([]int64, error) {
-	if t.inner == nil {
+func (t *HFTokenizer) encodeRaw(text string, addSpecialTokens bool) ([]int64, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.handle == nil {
 		return nil, ErrSessionClosed
 	}
-	uids, _, err := t.inner.EncodeErr(text, addSpecialTokens)
-	if err != nil {
-		return nil, err
+
+	cStr := C.CString(text)
+	defer C.free(unsafe.Pointer(cStr))
+
+	opts := C.struct_tokenizers_encode_options{
+		add_special_tokens: C.bool(addSpecialTokens),
+		return_tokens:     C.bool(false),
 	}
-	res := make([]int64, len(uids))
-	for i, u := range uids {
-		res[i] = int64(u)
+
+	buf := C.tokenizers_encode(t.handle, cStr, &opts)
+	n := int(buf.len)
+	if n == 0 {
+		return nil, nil
+	}
+	defer C.tokenizers_free_buffer(buf)
+
+	slice := unsafe.Slice(buf.ids, n)
+	res := make([]int64, n)
+	for i, id := range slice {
+		res[i] = int64(id)
 	}
 	return res, nil
 }
 
+// Encode encodes a string to token IDs.
+func (t *HFTokenizer) Encode(text string, addSpecialTokens bool) ([]int64, error) {
+	return t.encodeRaw(text, addSpecialTokens)
+}
+
 // Decode converts token IDs back to a string.
 func (t *HFTokenizer) Decode(tokens []int64, skipSpecialTokens bool) (string, error) {
-	if t.inner == nil {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.handle == nil {
 		return "", ErrSessionClosed
 	}
-	uids := make([]uint32, len(tokens))
-	for i, id := range tokens {
-		uids[i] = uint32(id)
+	if len(tokens) == 0 {
+		return "", nil
 	}
-	return t.inner.DecodeErr(uids, skipSpecialTokens)
+
+	uids := make([]C.uint32_t, len(tokens))
+	for i, id := range tokens {
+		uids[i] = C.uint32_t(id)
+	}
+
+	cStr := C.tokenizers_decode(t.handle, &uids[0], C.uint32_t(len(uids)), C.bool(skipSpecialTokens))
+	if cStr == nil {
+		return "", fmt.Errorf("golaya: failed to decode tokens")
+	}
+	defer C.tokenizers_free_string(cStr)
+
+	return C.GoString(cStr), nil
 }
 
 func (t *HFTokenizer) CLSTokenID() int64  { return t.clsTokenID }
@@ -139,12 +188,14 @@ func (t *HFTokenizer) SEPTokenID() int64  { return t.sepTokenID }
 func (t *HFTokenizer) MASKTokenID() int64 { return t.maskTokenID }
 func (t *HFTokenizer) PADTokenID() int64  { return t.padTokenID }
 
-// Close releases the tokenizer resources.
+// Close releases tokenizer resources.
 func (t *HFTokenizer) Close() error {
-	if t.inner != nil {
-		err := t.inner.Close()
-		t.inner = nil
-		return err
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.handle != nil {
+		C.tokenizers_free_tokenizer(t.handle)
+		t.handle = nil
 	}
 	return nil
 }

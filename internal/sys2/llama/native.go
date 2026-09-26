@@ -4,7 +4,6 @@ package llama
 
 /*
 #cgo CFLAGS: -O2
-#cgo darwin LDFLAGS: -ldl
 #cgo linux LDFLAGS: -ldl
 
 #include <stdlib.h>

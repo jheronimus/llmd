@@ -1,3 +1,4 @@
 # Treat upstream C/C++ runtime headers as vendored so GitHub Linguist classifies repo as Go
 internal/sys2/llama/*.h linguist-vendored
+internal/sys1/tokenizer/*.h linguist-vendored
 internal/sys1/tokenizer/lib/** linguist-vendored
