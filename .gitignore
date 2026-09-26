@@ -1,0 +1,18 @@
+# Binaries and libraries
+bin/
+*.dylib
+*.so
+*.dll
+.lib/
+
+# Cache and model downloads
+.cache/
+*.onnx
+*.onnx.data
+*.gguf
+*.tar.gz
+
+# Test artifacts and coverage
+*.out
+*.test
+coverage.txt
