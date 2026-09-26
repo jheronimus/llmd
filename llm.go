@@ -59,16 +59,22 @@ func Decide[T any](ctx context.Context, state any) (T, error) {
 
 // Extract executes System 2 structured JSON extraction, returning decoded struct of type T.
 func Extract[T any](ctx context.Context, prompt string) (T, error) {
+	return ExtractWithSystem[T](ctx, "", prompt)
+}
+
+// ExtractWithSystem executes System 2 structured JSON extraction with an explicit system prompt.
+func ExtractWithSystem[T any](ctx context.Context, system, prompt string) (T, error) {
 	var result T
 	c, err := getDefaultClient()
 	if err != nil {
 		return result, err
 	}
-	if err := c.Extract(ctx, prompt, &result); err != nil {
+	if err := c.ExtractWithSystem(ctx, system, prompt, &result); err != nil {
 		return result, err
 	}
 	return result, nil
 }
+
 
 // Generate executes System 2 text generation using the default client.
 func Generate(ctx context.Context, req Request) (Response, error) {

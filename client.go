@@ -154,12 +154,18 @@ func (c *Client) Decide(ctx context.Context, state any, dest any) error {
 
 // Extract generates structured output conforming to dest JSON schema via GBNF grammar.
 func (c *Client) Extract(ctx context.Context, prompt string, dest any) error {
+	return c.ExtractWithSystem(ctx, "", prompt, dest)
+}
+
+// ExtractWithSystem generates structured output using an explicit system prompt.
+func (c *Client) ExtractWithSystem(ctx context.Context, system, prompt string, dest any) error {
 	eng, err := c.getSys2()
 	if err != nil {
 		return err
 	}
-	return eng.Extract(ctx, prompt, dest)
+	return eng.ExtractWithSystem(ctx, system, prompt, dest)
 }
+
 
 // Generate executes autoregressive text generation.
 func (c *Client) Generate(ctx context.Context, req Request) (Response, error) {

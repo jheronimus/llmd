@@ -246,6 +246,10 @@ func (e *Engine) GenerateStream(ctx context.Context, req Request, cb StreamCallb
 }
 
 func (e *Engine) Extract(ctx context.Context, prompt string, dest any) error {
+	return e.ExtractWithSystem(ctx, "", prompt, dest)
+}
+
+func (e *Engine) ExtractWithSystem(ctx context.Context, system, prompt string, dest any) error {
 	if dest == nil {
 		return errors.New("llm: extract destination cannot be nil")
 	}
@@ -253,6 +257,7 @@ func (e *Engine) Extract(ctx context.Context, prompt string, dest any) error {
 	gStr := grammar.GenericJSON()
 
 	req := Request{
+		System:    system,
 		Prompt:    prompt,
 		Grammar:   gStr,
 		MaxTokens: 2048,
@@ -270,6 +275,7 @@ func (e *Engine) Extract(ctx context.Context, prompt string, dest any) error {
 
 	return nil
 }
+
 
 func formatChatML(system, user string) string {
 	var b strings.Builder
