@@ -4,6 +4,8 @@ bin/
 *.so
 *.dll
 .lib/
+target/
+daemon/target/
 
 # Cache and model downloads
 .cache/

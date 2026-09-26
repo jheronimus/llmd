@@ -7,15 +7,21 @@ tasks:
       - task: lint
       - task: test
 
+  build:daemon:
+    desc: Build llmd daemon release binary
+    dir: daemon
+    cmds:
+      - cargo build --release
+
   test:
     desc: Run unit tests
     cmds:
-      - go test -v -short -race ./...
+      - CGO_ENABLED=0 go test -v -short ./...
 
   test:live:
     desc: Run live end-to-end model inference tests
     cmds:
-      - go test -v -run TestLiveEndToEnd .
+      - CGO_ENABLED=0 go test -v -run TestLiveEndToEnd .
 
   lint:
     desc: Run golangci-lint

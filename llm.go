@@ -91,7 +91,8 @@ func GenerateStream(ctx context.Context, req Request, cb StreamCallback) error {
 	if err != nil {
 		return err
 	}
-	return c.GenerateStream(ctx, req, cb)
+	_, err = c.GenerateStream(ctx, req, cb)
+	return err
 }
 
 // Preload downloads all required assets for the default client into local cache.

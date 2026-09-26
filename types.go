@@ -67,19 +67,43 @@ type Response struct {
 
 // Config holds runtime configuration options for Client.
 type Config struct {
-	CacheDir        string
-	Threads         int
-	ContextSize     int
-	IdleTimeout     time.Duration
-	AutoDownload    bool
-	Sys1ModelDir    string
-	Sys1LibPath     string
-	Sys2ModelPath   string
-	Sys2LibPath     string
+	CacheDir      string
+	SocketPath    string
+	DaemonBinary  string
+	AutoSpawn     bool
+	Threads       int
+	ContextSize   int
+	IdleTimeout   time.Duration
+	AutoDownload  bool
+	Sys1ModelDir  string
+	Sys1LibPath   string
+	Sys2ModelPath string
+	Sys2LibPath   string
 }
 
 // Option modifies Client configuration.
 type Option func(*Config)
+
+// WithSocketPath overrides the Unix domain socket path (default: /tmp/llm.sock).
+func WithSocketPath(path string) Option {
+	return func(c *Config) {
+		c.SocketPath = path
+	}
+}
+
+// WithDaemonBinary sets explicit path to the llmd sidecar binary.
+func WithDaemonBinary(path string) Option {
+	return func(c *Config) {
+		c.DaemonBinary = path
+	}
+}
+
+// WithAutoSpawn controls whether to automatically launch llmd if not running (default: true).
+func WithAutoSpawn(enable bool) Option {
+	return func(c *Config) {
+		c.AutoSpawn = enable
+	}
+}
 
 // WithCacheDir overrides the root asset cache directory (~/.cache/llm).
 func WithCacheDir(dir string) Option {

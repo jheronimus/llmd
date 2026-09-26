@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -221,6 +222,73 @@ func LocateOrDownloadSys2Model(customPath, cacheDir string, autoDownload bool) (
 	}
 
 	return targetPath, nil
+}
+
+// LocateOrDownloadDaemon finds or fetches the llmd sidecar daemon binary.
+func LocateOrDownloadDaemon(customPath, cacheDir string, autoDownload bool) (string, error) {
+	if customPath != "" {
+		if _, err := os.Stat(customPath); err == nil {
+			return customPath, nil
+		}
+		return "", fmt.Errorf("llm: specified llmd binary not found: %s", customPath)
+	}
+
+	if env := os.Getenv("LLMD_PATH"); env != "" {
+		if _, err := os.Stat(env); err == nil {
+			return env, nil
+		}
+	}
+
+	// Check local dev builds (daemon/target/release/llmd)
+	cwd, _ := os.Getwd()
+	dir := cwd
+	for i := 0; i < 5; i++ {
+		p := filepath.Join(dir, "daemon", "target", "release", "llmd")
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
+	// Check ~/.cache/llm/bin/llmd
+	binPath := filepath.Join(cacheDir, "bin", "llmd")
+	if _, err := os.Stat(binPath); err == nil {
+		return binPath, nil
+	}
+
+	// Check PATH
+	if p, err := exec.LookPath("llmd"); err == nil {
+		return p, nil
+	}
+
+	if !autoDownload {
+		return "", fmt.Errorf("llm: llmd daemon binary not found. Set LLMD_PATH, install to PATH, or enable WithAutoDownload")
+	}
+
+	binDir := filepath.Join(cacheDir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		return "", err
+	}
+
+	return downloadPrebuiltDaemon(binDir)
+}
+
+func downloadPrebuiltDaemon(binDir string) (string, error) {
+	osName := runtime.GOOS
+	arch := runtime.GOARCH
+	destFile := filepath.Join(binDir, "llmd")
+	url := fmt.Sprintf("https://github.com/jheronimus/llm/releases/latest/download/llmd-%s-%s.tar.gz", osName, arch)
+	if err := downloadAndExtractSingleFile(url, "llmd", destFile); err != nil {
+		return "", fmt.Errorf("failed downloading daemon binary from %s: %w", url, err)
+	}
+	if err := os.Chmod(destFile, 0o755); err != nil {
+		return "", err
+	}
+	return destFile, nil
 }
 
 func isValidModelDir(dir string) bool {
