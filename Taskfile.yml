@@ -1,8 +1,5 @@
 version: '3'
 
-env:
-  CGO_LDFLAGS: '-L{{.ROOT_DIR}}/.lib'
-
 tasks:
   default:
     desc: Run tests and linters
@@ -10,31 +7,13 @@ tasks:
       - task: lint
       - task: test
 
-  deps:tokenizers:
-    desc: Ensure native libtokenizers.a is present in .lib
-    status:
-      - test -f {{.ROOT_DIR}}/.lib/libtokenizers.a
-    cmds:
-      - mkdir -p {{.ROOT_DIR}}/.lib
-      - |
-        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-        ARCH=$(uname -m)
-        case "$ARCH" in
-          x86_64) ARCH="amd64" ;;
-          aarch64|arm64) ARCH="arm64" ;;
-        esac
-        echo "Downloading libtokenizers for $OS-$ARCH..."
-        curl -sL "https://github.com/daulet/tokenizers/releases/latest/download/libtokenizers.${OS}-${ARCH}.tar.gz" | tar -xz -C {{.ROOT_DIR}}/.lib
-
   test:
     desc: Run unit tests
-    deps: [deps:tokenizers]
     cmds:
       - go test -v -short -race ./...
 
   test:live:
     desc: Run live end-to-end model inference tests
-    deps: [deps:tokenizers]
     cmds:
       - go test -v -run TestLiveEndToEnd .
 

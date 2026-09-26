@@ -155,9 +155,10 @@ static void c_llama_model_free(void * model) {
 }
 
 static void * c_llama_model_get_vocab(void * model) {
-    if (g_binding.model_get_vocab) return g_binding.model_get_vocab(model);
+    if (g_binding.model_get_vocab) return (void *)g_binding.model_get_vocab(model);
     return NULL;
 }
+
 
 static void * c_llama_init_ctx(void * model, uint32_t n_ctx, int32_t n_threads) {
     if (!g_binding.init_from_model || !g_binding.context_default_params) return NULL;

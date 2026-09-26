@@ -1,10 +1,13 @@
 package tokenizer
 
 /*
-#cgo darwin LDFLAGS: -L${SRCDIR}/../../../.lib
-#cgo linux LDFLAGS: -L${SRCDIR}/../../../.lib
+#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/lib/darwin_arm64 -framework CoreFoundation -framework Security
+#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/lib/darwin_amd64 -framework CoreFoundation -framework Security
+#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/lib/linux_amd64
+#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/lib/linux_arm64
 */
 import "C"
+
 
 import (
 	"encoding/json"
