@@ -9,12 +9,14 @@ package llama
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <dlfcn.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include "llama.h"
 
 // Function pointer typedefs matching official llama.h
+typedef void (*fn_llama_log_set)(ggml_log_callback log_callback, void * user_data);
 typedef void (*fn_llama_backend_init)(void);
 typedef void (*fn_llama_backend_free)(void);
 typedef struct llama_model_params (*fn_llama_model_default_params)(void);
@@ -75,9 +77,42 @@ typedef struct {
     fn_llama_sampler_free sampler_free;
     fn_llama_get_memory get_memory;
     fn_llama_memory_clear memory_clear;
+    fn_llama_log_set log_set;
 } llama_binding_t;
 
 static llama_binding_t g_binding;
+
+static void c_llama_log_callback(enum ggml_log_level level, const char * text, void * user_data) {
+    (void)user_data;
+    static int checked_env = 0;
+    static int verbose = 0;
+    static int last_was_error = 0;
+
+    if (!checked_env) {
+        const char * env = getenv("LLM_DEBUG");
+        if (!env) {
+            env = getenv("LLAMA_LOG_VERBOSE");
+        }
+        if (env && (strcmp(env, "1") == 0 || strcmp(env, "true") == 0)) {
+            verbose = 1;
+        }
+        checked_env = 1;
+    }
+
+    if (verbose) {
+        fputs(text, stderr);
+        return;
+    }
+
+    if (level == GGML_LOG_LEVEL_ERROR) {
+        last_was_error = 1;
+        fputs(text, stderr);
+    } else if (level == GGML_LOG_LEVEL_CONT && last_was_error) {
+        fputs(text, stderr);
+    } else {
+        last_was_error = 0;
+    }
+}
 
 static int load_llama_symbols(const char * lib_path, char * err_buf, size_t err_size) {
     void * h = dlopen(lib_path, RTLD_NOW | RTLD_GLOBAL);
@@ -127,6 +162,10 @@ static int load_llama_symbols(const char * lib_path, char * err_buf, size_t err_
     LOAD_SYM(memory_clear)
 
     g_binding.free_context = (fn_llama_free)dlsym(h, "llama_free");
+    g_binding.log_set = (fn_llama_log_set)dlsym(h, "llama_log_set");
+    if (g_binding.log_set) {
+        g_binding.log_set(c_llama_log_callback, NULL);
+    }
 
     #undef LOAD_SYM
 
