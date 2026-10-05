@@ -1,0 +1,5 @@
+target/
+models/
+*.sock
+*.log
+.DS_Store

@@ -1,0 +1,28 @@
+version: '3'
+
+tasks:
+  default:
+    desc: Run tests and build check
+    cmds:
+      - task: test
+      - task: check
+
+  check:
+    desc: Check Rust daemon compilation
+    cmds:
+      - cargo check
+
+  build:
+    desc: Build release binary of llmd
+    cmds:
+      - cargo build --release
+
+  test:
+    desc: Run Go client unit tests
+    cmds:
+      - go test -v ./...
+
+  docker:build:
+    desc: Build multi-stage Docker container
+    cmds:
+      - docker build -t llmd:latest .
