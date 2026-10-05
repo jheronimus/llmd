@@ -1,13 +1,14 @@
 use anyhow::{Context, Result};
-use flate2::read::GzDecoder;
 use std::fs::{self, File};
-use std::io::{copy, BufReader};
+use std::io::copy;
 use std::path::{Path, PathBuf};
-use tar::Archive;
 use tracing::info;
 
-pub const DEFAULT_LAYA_URL: &str =
-    "https://github.com/jheronimus/golaya/releases/latest/download/laya-multilingual.tar.gz";
+pub const DEFAULT_LAYA_TOKENIZER_URL: &str =
+    "https://huggingface.co/Emerald7664/laya-multilingual-onnx/resolve/main/tokenizer.json";
+
+pub const DEFAULT_LAYA_MODEL_URL: &str =
+    "https://huggingface.co/Emerald7664/laya-multilingual-onnx/resolve/main/model.onnx";
 
 pub const DEFAULT_QWEN_URL: &str =
     "https://huggingface.co/Qwen/Qwen3-0.6B-Instruct-GGUF/resolve/main/qwen3-0.6b-instruct-q4_k_m.gguf";
@@ -23,22 +24,36 @@ pub fn ensure_sys1_model(target_dir: &Path) -> Result<PathBuf> {
         return Ok(target_dir.to_path_buf());
     }
 
-    info!(
-        "System 1 model missing at {:?}. Downloading from {}...",
-        target_dir, DEFAULT_LAYA_URL
-    );
     fs::create_dir_all(target_dir)?;
 
-    let resp = ureq::get(DEFAULT_LAYA_URL)
-        .call()
-        .context("Failed downloading Laya archive")?;
+    if !tok_path.exists() {
+        info!(
+            "System 1 tokenizer missing at {:?}. Downloading from {}...",
+            tok_path, DEFAULT_LAYA_TOKENIZER_URL
+        );
+        let resp = ureq::get(DEFAULT_LAYA_TOKENIZER_URL)
+            .call()
+            .context("Failed downloading Laya tokenizer")?;
+        let mut dest = File::create(&tok_path)?;
+        let mut reader = resp.into_body().into_reader();
+        copy(&mut reader, &mut dest)?;
+        info!("System 1 tokenizer downloaded successfully to {:?}", tok_path);
+    }
 
-    let reader = BufReader::new(resp.into_body().into_reader());
-    let tar = GzDecoder::new(reader);
-    let mut archive = Archive::new(tar);
-    archive.unpack(target_dir)?;
+    if !onnx_path.exists() {
+        info!(
+            "System 1 model missing at {:?}. Downloading from {}...",
+            onnx_path, DEFAULT_LAYA_MODEL_URL
+        );
+        let resp = ureq::get(DEFAULT_LAYA_MODEL_URL)
+            .call()
+            .context("Failed downloading Laya ONNX model")?;
+        let mut dest = File::create(&onnx_path)?;
+        let mut reader = resp.into_body().into_reader();
+        copy(&mut reader, &mut dest)?;
+        info!("System 1 ONNX model downloaded successfully to {:?}", onnx_path);
+    }
 
-    info!("System 1 model extracted successfully to {:?}", target_dir);
     Ok(target_dir.to_path_buf())
 }
 

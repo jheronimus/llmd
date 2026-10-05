@@ -48,7 +48,9 @@ async fn main() -> Result<()> {
     let sys1_dir = args.sys1_dir.unwrap_or_else(|| {
         default_models_dir.join("laya-multilingual")
     });
-    let _ = fetch::ensure_sys1_model(&sys1_dir);
+    if let Err(e) = fetch::ensure_sys1_model(&sys1_dir) {
+        tracing::warn!("Failed to ensure System 1 model: {e}");
+    }
 
     // 2. Resolve or auto-download System 2 model (Qwen3 0.6B GGUF)
     let sys2_path = args.sys2_model.unwrap_or_else(|| {

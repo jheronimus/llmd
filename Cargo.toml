@@ -16,6 +16,6 @@ ort = { version = "2.0.0-rc.13", features = ["download-binaries"] }
 llama-cpp-2 = { version = "0.1.157", features = ["metal"] }
 anyhow = "1.0"
 encoding_rs = "0.8"
-ureq = "3"
+ureq = { version = "3", default-features = false, features = ["rustls"] }
 flate2 = "1.0"
 tar = "0.4"
