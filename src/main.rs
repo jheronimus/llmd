@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
         tracing::warn!("Failed to ensure System 1 model: {e}");
     }
 
-    // 2. Resolve or auto-download System 2 model (Qwen3 0.6B GGUF)
+    // 2. Resolve or auto-download System 2 model (Qwen3.5 0.8B GGUF)
     let sys2_path = args.sys2_model.unwrap_or_else(|| {
         default_models_dir.join(fetch::DEFAULT_QWEN_FILENAME)
     });

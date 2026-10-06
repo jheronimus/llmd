@@ -301,7 +301,7 @@ async fn handle_openai_models() -> impl IntoResponse {
             "object": "list",
             "data": [
                 {
-                    "id": "qwen3-0.6b",
+                    "id": "qwen3.5-0.8b",
                     "object": "model",
                     "created": 1727700000,
                     "owned_by": "llmd"
@@ -377,7 +377,7 @@ async fn handle_openai_chat(
             "id": format!("chatcmpl-{}", now),
             "object": "chat.completion",
             "created": now,
-            "model": "qwen3-0.6b",
+            "model": "qwen3.5-0.8b",
             "choices": [
                 {
                     "index": 0,

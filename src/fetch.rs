@@ -11,9 +11,9 @@ pub const DEFAULT_LAYA_MODEL_URL: &str =
     "https://huggingface.co/Emerald7664/laya-multilingual-onnx/resolve/main/model.onnx";
 
 pub const DEFAULT_QWEN_URL: &str =
-    "https://huggingface.co/Qwen/Qwen3-0.6B-Instruct-GGUF/resolve/main/qwen3-0.6b-instruct-q4_k_m.gguf";
+    "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf";
 
-pub const DEFAULT_QWEN_FILENAME: &str = "qwen3-0.6b-instruct-q4_k_m.gguf";
+pub const DEFAULT_QWEN_FILENAME: &str = "qwen3.5-0.8b-instruct-q4_k_m.gguf";
 
 /// Ensure System 1 (Laya ONNX + tokenizer.json) is present in target directory.
 pub fn ensure_sys1_model(target_dir: &Path) -> Result<PathBuf> {
@@ -57,7 +57,7 @@ pub fn ensure_sys1_model(target_dir: &Path) -> Result<PathBuf> {
     Ok(target_dir.to_path_buf())
 }
 
-/// Ensure System 2 (Qwen3 GGUF) is present in target file path.
+/// Ensure System 2 (Qwen3.5 GGUF) is present in target file path.
 pub fn ensure_sys2_model(target_path: &Path) -> Result<PathBuf> {
     if target_path.exists() {
         return Ok(target_path.to_path_buf());
@@ -74,7 +74,7 @@ pub fn ensure_sys2_model(target_path: &Path) -> Result<PathBuf> {
 
     let resp = ureq::get(DEFAULT_QWEN_URL)
         .call()
-        .context("Failed downloading Qwen3 GGUF")?;
+        .context("Failed downloading Qwen3.5 GGUF")?;
 
     let mut dest = File::create(target_path)?;
     let mut reader = resp.into_body().into_reader();
