@@ -45,17 +45,17 @@ async fn main() -> Result<()> {
     let default_models_dir = PathBuf::from(format!("{home}/.cache/llmd/models"));
 
     // 1. Resolve or auto-download System 1 model (Laya Multilingual ONNX)
-    let sys1_dir = args.sys1_dir.unwrap_or_else(|| {
-        default_models_dir.join("laya-multilingual")
-    });
+    let sys1_dir = args
+        .sys1_dir
+        .unwrap_or_else(|| default_models_dir.join("laya-multilingual"));
     if let Err(e) = fetch::ensure_sys1_model(&sys1_dir) {
         tracing::warn!("Failed to ensure System 1 model: {e}");
     }
 
     // 2. Resolve or auto-download System 2 model (Qwen3.5 0.8B GGUF)
-    let sys2_path = args.sys2_model.unwrap_or_else(|| {
-        default_models_dir.join(fetch::DEFAULT_QWEN_FILENAME)
-    });
+    let sys2_path = args
+        .sys2_model
+        .unwrap_or_else(|| default_models_dir.join(fetch::DEFAULT_QWEN_FILENAME));
     let _ = fetch::ensure_sys2_model(&sys2_path);
 
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
@@ -88,7 +88,10 @@ async fn main() -> Result<()> {
                     .as_secs();
                 let last = watcher_state.last_activity.load(Ordering::Relaxed);
                 if current_time.saturating_sub(last) >= idle_timeout {
-                    info!("Idle timeout of {}s reached. Initiating shutdown...", idle_timeout);
+                    info!(
+                        "Idle timeout of {}s reached. Initiating shutdown...",
+                        idle_timeout
+                    );
                     let _ = watcher_tx.send(()).await;
                     break;
                 }

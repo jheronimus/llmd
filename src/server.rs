@@ -98,15 +98,24 @@ async fn handle_decide(
     // 1. Run System 1 (Laya ONNX)
     let mut sys1_guard = state.sys1.lock().await;
     if sys1_guard.is_none() {
-        let engine = Sys1Engine::new(&state.sys1_dir)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed loading Sys1: {e}")))?;
+        let engine = Sys1Engine::new(&state.sys1_dir).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed loading Sys1: {e}"),
+            )
+        })?;
         *sys1_guard = Some(engine);
     }
 
     let sys1_engine = sys1_guard.as_mut().unwrap();
     let initial_answers = sys1_engine
         .decide(&req.state, &req.questions)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Inference error: {e}")))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Inference error: {e}"),
+            )
+        })?;
 
     let mut out_answers = BTreeMap::new();
     let mut ambiguous_questions = Vec::new();
@@ -197,6 +206,7 @@ pub struct GenerateRequest {
     pub system: Option<String>,
     pub prompt: String,
     pub grammar: Option<String>,
+    pub json_schema: Option<serde_json::Value>,
     pub temperature: Option<f32>,
     pub top_p: Option<f32>,
     pub max_tokens: Option<usize>,
@@ -208,6 +218,40 @@ pub struct GenerateResponse {
     pub duration_ms: u64,
 }
 
+fn resolve_grammar(
+    grammar: Option<&str>,
+    json_schema: Option<&serde_json::Value>,
+) -> Result<Option<String>, (StatusCode, String)> {
+    if let Some(g) = grammar {
+        let trimmed = g.trim();
+        if !trimmed.is_empty() {
+            return Ok(Some(trimmed.to_string()));
+        }
+    }
+    if let Some(schema_val) = json_schema {
+        let schema_str = match schema_val {
+            serde_json::Value::String(s) => s.clone(),
+            other => serde_json::to_string(other).map_err(|e| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    format!("Invalid JSON schema value: {e}"),
+                )
+            })?,
+        };
+        let trimmed = schema_str.trim();
+        if !trimmed.is_empty() {
+            let g = llama_cpp_2::json_schema_to_grammar(trimmed).map_err(|e| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    format!("Failed to convert JSON schema to grammar: {e}"),
+                )
+            })?;
+            return Ok(Some(g));
+        }
+    }
+    Ok(None)
+}
+
 async fn handle_generate(
     State(state): State<Arc<AppState>>,
     Json(req): Json<GenerateRequest>,
@@ -215,12 +259,18 @@ async fn handle_generate(
     state.touch();
     let start = Instant::now();
 
+    let grammar = resolve_grammar(req.grammar.as_deref(), req.json_schema.as_ref())?;
+
     let _global_guard = state.inference_lock.lock().await;
 
     let mut guard = state.sys2.lock().await;
     if guard.is_none() {
-        let engine = Sys2Engine::new(&state.sys2_path)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed loading Sys2: {e}")))?;
+        let engine = Sys2Engine::new(&state.sys2_path).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed loading Sys2: {e}"),
+            )
+        })?;
         *guard = Some(engine);
     }
 
@@ -229,13 +279,18 @@ async fn handle_generate(
         .generate(
             req.system.as_deref().unwrap_or(""),
             &req.prompt,
-            req.grammar.as_deref(),
+            grammar.as_deref(),
             req.temperature.unwrap_or(0.2),
             req.top_p.unwrap_or(0.9),
             req.max_tokens.unwrap_or(1024),
         )
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Generation error: {e}")))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Generation error: {e}"),
+            )
+        })?;
 
     Ok(Json(GenerateResponse {
         text,
@@ -248,6 +303,7 @@ pub struct ExtractRequest {
     pub system: Option<String>,
     pub prompt: String,
     pub grammar: Option<String>,
+    pub json_schema: Option<serde_json::Value>,
     pub max_tokens: Option<usize>,
 }
 
@@ -264,12 +320,18 @@ async fn handle_extract(
     state.touch();
     let start = Instant::now();
 
+    let grammar = resolve_grammar(req.grammar.as_deref(), req.json_schema.as_ref())?;
+
     let _global_guard = state.inference_lock.lock().await;
 
     let mut guard = state.sys2.lock().await;
     if guard.is_none() {
-        let engine = Sys2Engine::new(&state.sys2_path)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed loading Sys2: {e}")))?;
+        let engine = Sys2Engine::new(&state.sys2_path).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed loading Sys2: {e}"),
+            )
+        })?;
         *guard = Some(engine);
     }
 
@@ -278,13 +340,18 @@ async fn handle_extract(
         .generate(
             req.system.as_deref().unwrap_or(""),
             &req.prompt,
-            req.grammar.as_deref(),
+            grammar.as_deref(),
             0.1,
             0.9,
             req.max_tokens.unwrap_or(2048),
         )
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Extract error: {e}")))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Extract error: {e}"),
+            )
+        })?;
 
     Ok(Json(ExtractResponse {
         raw_text,
@@ -348,8 +415,12 @@ async fn handle_openai_chat(
 
     let mut guard = state.sys2.lock().await;
     if guard.is_none() {
-        let engine = Sys2Engine::new(&state.sys2_path)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed loading Sys2: {e}")))?;
+        let engine = Sys2Engine::new(&state.sys2_path).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed loading Sys2: {e}"),
+            )
+        })?;
         *guard = Some(engine);
     }
 
@@ -364,7 +435,12 @@ async fn handle_openai_chat(
             req.max_tokens.unwrap_or(1024),
         )
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Chat completion error: {e}")))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Chat completion error: {e}"),
+            )
+        })?;
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -399,5 +475,45 @@ async fn handle_openai_chat(
 
 async fn handle_shutdown(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let _ = state.shutdown_tx.send(()).await;
-    (StatusCode::OK, Json(serde_json::json!({"status": "shutting down"})))
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({"status": "shutting down"})),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_grammar_from_schema_string() {
+        let schema =
+            serde_json::json!(r#"{"type":"object","properties":{"score":{"type":"number"}}}"#);
+        let g = resolve_grammar(None, Some(&schema)).unwrap();
+        assert!(g.is_some());
+        assert!(g.unwrap().contains("root ::="));
+    }
+
+    #[test]
+    fn test_resolve_grammar_from_schema_object() {
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "score": { "type": "number" },
+                "fit_reason": { "type": "string" }
+            },
+            "required": ["score", "fit_reason"]
+        });
+        let g = resolve_grammar(None, Some(&schema)).unwrap();
+        assert!(g.is_some());
+        assert!(g.unwrap().contains("root ::="));
+    }
+
+    #[test]
+    fn test_resolve_grammar_precedence() {
+        let grammar = "root ::= \"hello\"";
+        let schema = serde_json::json!({"type": "string"});
+        let g = resolve_grammar(Some(grammar), Some(&schema)).unwrap();
+        assert_eq!(g.as_deref(), Some(grammar));
+    }
 }

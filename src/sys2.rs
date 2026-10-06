@@ -24,7 +24,11 @@ impl Sys2Engine {
 
         let backend = Arc::new(LlamaBackend::init()?);
         let model_params = LlamaModelParams::default();
-        let model = Arc::new(LlamaModel::load_from_file(&backend, model_path, &model_params)?);
+        let model = Arc::new(LlamaModel::load_from_file(
+            &backend,
+            model_path,
+            &model_params,
+        )?);
 
         Ok(Self {
             backend,
@@ -48,8 +52,7 @@ impl Sys2Engine {
         let tokens = self.model.str_to_token(&formatted, AddBos::Never)?;
 
         let n_ctx = (tokens.len() + max_tokens + 64).max(2048) as u32;
-        let ctx_params = LlamaContextParams::default()
-            .with_n_ctx(NonZeroU32::new(n_ctx));
+        let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(n_ctx));
         let mut ctx = self.model.new_context(&self.backend, ctx_params)?;
 
         let mut batch = LlamaBatch::new(n_ctx as usize, 1);
@@ -60,13 +63,23 @@ impl Sys2Engine {
         if let Some(g) = grammar {
             let trimmed = g.trim();
             if !trimmed.is_empty() {
-                if let Ok(g_sampler) = LlamaSampler::grammar(&self.model, trimmed, "root") {
-                    samplers.push(g_sampler);
-                }
+                let g_sampler = LlamaSampler::grammar(&self.model, trimmed, "root")
+                    .map_err(|e| anyhow!("failed to initialize grammar sampler: {e}"))?;
+                samplers.push(g_sampler);
             }
         }
+        samplers.push(LlamaSampler::penalties(
+            self.model.n_vocab(),
+            64,
+            1.1,
+            0.0,
+            0.0,
+        ));
         samplers.push(LlamaSampler::temp(if temp <= 0.0 { 0.2 } else { temp }));
-        samplers.push(LlamaSampler::top_p(if top_p <= 0.0 { 0.9 } else { top_p }, 1));
+        samplers.push(LlamaSampler::top_p(
+            if top_p <= 0.0 { 0.9 } else { top_p },
+            1,
+        ));
         samplers.push(LlamaSampler::dist(1337));
 
         let mut sampler = LlamaSampler::chain_simple(samplers);
@@ -83,7 +96,9 @@ impl Sys2Engine {
                 break;
             }
 
-            let piece = self.model.token_to_piece(token, &mut decoder, false, None)?;
+            let piece = self
+                .model
+                .token_to_piece(token, &mut decoder, false, None)?;
             output.push_str(&piece);
 
             if output.contains("<|im_end|>") || output.contains("<end_of_turn>") {

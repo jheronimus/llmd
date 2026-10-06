@@ -150,10 +150,13 @@ impl Sys1Engine {
             qtypes[i] = seq.qtype;
         }
 
-        let t_ids = Tensor::from_array(([batch, max_seq_len], padded_input_ids.into_boxed_slice()))?;
+        let t_ids =
+            Tensor::from_array(([batch, max_seq_len], padded_input_ids.into_boxed_slice()))?;
         let t_att = Tensor::from_array(([batch, max_seq_len], padded_att_mask.into_boxed_slice()))?;
-        let t_pos = Tensor::from_array(([batch, max_markers], padded_marker_pos.into_boxed_slice()))?;
-        let t_mask = Tensor::from_array(([batch, max_markers], padded_marker_mask.into_boxed_slice()))?;
+        let t_pos =
+            Tensor::from_array(([batch, max_markers], padded_marker_pos.into_boxed_slice()))?;
+        let t_mask =
+            Tensor::from_array(([batch, max_markers], padded_marker_mask.into_boxed_slice()))?;
         let t_qtype = Tensor::from_array(([batch], qtypes.into_boxed_slice()))?;
 
         let inputs = ort::inputs![
@@ -193,7 +196,9 @@ impl Sys1Engine {
 
             let ans_val = match questions[&seq.qid].qtype {
                 QuestionType::Noul => serde_json::Value::Bool(best_idx == 1),
-                QuestionType::Score => serde_json::Value::Number(serde_json::Number::from(best_idx)),
+                QuestionType::Score => {
+                    serde_json::Value::Number(serde_json::Number::from(best_idx))
+                }
                 QuestionType::Choice => {
                     let label = if let Some(opt) = seq.opts.get(best_idx) {
                         if let Some((k, _)) = opt.split_once(':') {
@@ -231,7 +236,10 @@ fn render_options(
         QuestionType::Choice => {
             if let Some(c) = criteria {
                 if let Some(arr) = c.as_array() {
-                    let opts: Vec<String> = arr.iter().filter_map(|v| v.as_str().map(String::from)).collect();
+                    let opts: Vec<String> = arr
+                        .iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect();
                     return Ok(opts);
                 }
                 if let Some(map) = c.as_object() {
@@ -262,7 +270,11 @@ fn render_options(
                     return Ok(opts);
                 }
             }
-            Ok(vec!["level 0: low".into(), "level 1: medium".into(), "level 2: high".into()])
+            Ok(vec![
+                "level 0: low".into(),
+                "level 1: medium".into(),
+                "level 2: high".into(),
+            ])
         }
         QuestionType::Noul => {
             let mut false_lbl = "false".to_string();
@@ -298,7 +310,9 @@ fn build_sequence(
 
     let mut opt_ids: Vec<Vec<i64>> = Vec::new();
     for opt in opts {
-        let enc = tok.encode(format!(" {opt}"), false).map_err(|e| anyhow!("{e}"))?;
+        let enc = tok
+            .encode(format!(" {opt}"), false)
+            .map_err(|e| anyhow!("{e}"))?;
         let mut ids: Vec<i64> = enc.get_ids().iter().map(|&x| x as i64).collect();
         if ids.len() > 48 {
             ids.truncate(48);

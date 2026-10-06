@@ -37,7 +37,10 @@ pub fn ensure_sys1_model(target_dir: &Path) -> Result<PathBuf> {
         let mut dest = File::create(&tok_path)?;
         let mut reader = resp.into_body().into_reader();
         copy(&mut reader, &mut dest)?;
-        info!("System 1 tokenizer downloaded successfully to {:?}", tok_path);
+        info!(
+            "System 1 tokenizer downloaded successfully to {:?}",
+            tok_path
+        );
     }
 
     if !onnx_path.exists() {
@@ -51,7 +54,10 @@ pub fn ensure_sys1_model(target_dir: &Path) -> Result<PathBuf> {
         let mut dest = File::create(&onnx_path)?;
         let mut reader = resp.into_body().into_reader();
         copy(&mut reader, &mut dest)?;
-        info!("System 1 ONNX model downloaded successfully to {:?}", onnx_path);
+        info!(
+            "System 1 ONNX model downloaded successfully to {:?}",
+            onnx_path
+        );
     }
 
     Ok(target_dir.to_path_buf())
@@ -80,6 +86,9 @@ pub fn ensure_sys2_model(target_path: &Path) -> Result<PathBuf> {
     let mut reader = resp.into_body().into_reader();
     copy(&mut reader, &mut dest)?;
 
-    info!("System 2 model downloaded successfully to {:?}", target_path);
+    info!(
+        "System 2 model downloaded successfully to {:?}",
+        target_path
+    );
     Ok(target_path.to_path_buf())
 }

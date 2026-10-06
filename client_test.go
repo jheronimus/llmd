@@ -70,8 +70,10 @@ func TestClient_Decide(t *testing.T) {
 }
 
 func TestClient_Generate(t *testing.T) {
+	var receivedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/generate" {
+			_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 			res := map[string]any{
 				"text":        `{"role":"developer"}`,
 				"duration_ms": 120,
@@ -87,8 +89,10 @@ func TestClient_Generate(t *testing.T) {
 	client := llmd.NewClient(llmd.WithBaseURL(server.URL))
 	defer client.Close()
 
+	schema := `{"type":"object","properties":{"role":{"type":"string"}}}`
 	resp, err := client.Generate(context.Background(), llmd.Request{
-		Prompt: "Extract title: Senior developer",
+		Prompt:     "Extract title: Senior developer",
+		JSONSchema: schema,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -96,5 +100,9 @@ func TestClient_Generate(t *testing.T) {
 
 	if resp.Text != `{"role":"developer"}` {
 		t.Fatalf("unexpected text output: %s", resp.Text)
+	}
+
+	if receivedBody["json_schema"] != schema {
+		t.Fatalf("expected json_schema %q, got %v", schema, receivedBody["json_schema"])
 	}
 }

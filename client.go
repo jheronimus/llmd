@@ -113,6 +113,7 @@ type generateReqEnvelope struct {
 	System      *string  `json:"system,omitempty"`
 	Prompt      string   `json:"prompt"`
 	Grammar     *string  `json:"grammar,omitempty"`
+	JSONSchema  *string  `json:"json_schema,omitempty"`
 	Temperature *float32 `json:"temperature,omitempty"`
 	TopP        *float32 `json:"top_p,omitempty"`
 	MaxTokens   *int     `json:"max_tokens,omitempty"`
@@ -140,6 +141,9 @@ func (c *Client) Generate(ctx context.Context, req Request) (Response, error) {
 	}
 	if req.Grammar != "" {
 		gReq.Grammar = &req.Grammar
+	}
+	if req.JSONSchema != "" {
+		gReq.JSONSchema = &req.JSONSchema
 	}
 	if req.Temperature > 0 {
 		gReq.Temperature = &req.Temperature
