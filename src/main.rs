@@ -32,7 +32,7 @@ struct Args {
     #[arg(long)]
     sys2_model: Option<PathBuf>,
 
-    #[arg(long, default_value_t = 0)]
+    #[arg(long, default_value_t = 300)]
     idle_timeout: u64,
 }
 
@@ -77,7 +77,6 @@ async fn main() -> Result<()> {
     // Idle watcher task (if idle_timeout > 0)
     let idle_timeout = args.idle_timeout;
     let watcher_state = Arc::clone(&state);
-    let watcher_tx = shutdown_tx.clone();
     if idle_timeout > 0 {
         tokio::spawn(async move {
             loop {
@@ -88,12 +87,17 @@ async fn main() -> Result<()> {
                     .as_secs();
                 let last = watcher_state.last_activity.load(Ordering::Relaxed);
                 if current_time.saturating_sub(last) >= idle_timeout {
-                    info!(
-                        "Idle timeout of {}s reached. Initiating shutdown...",
-                        idle_timeout
-                    );
-                    let _ = watcher_tx.send(()).await;
-                    break;
+                    let mut sys1 = watcher_state.sys1.lock().await;
+                    let mut sys2 = watcher_state.sys2.lock().await;
+                    if sys1.is_some() || sys2.is_some() {
+                        info!(
+                            "Idle timeout of {}s reached without activity. Unloading models from RAM...",
+                            idle_timeout
+                        );
+                        *sys1 = None;
+                        *sys2 = None;
+                        info!("Models successfully unloaded. llmd in standby mode.");
+                    }
                 }
             }
         });

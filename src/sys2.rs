@@ -52,12 +52,26 @@ impl Sys2Engine {
         let tokens = self.model.str_to_token(&formatted, AddBos::Never)?;
 
         let n_ctx = (tokens.len() + max_tokens + 64).max(2048) as u32;
-        let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(n_ctx));
+        let ctx_params = LlamaContextParams::default()
+            .with_n_ctx(NonZeroU32::new(n_ctx))
+            .with_n_batch(512)
+            .with_n_ubatch(512);
         let mut ctx = self.model.new_context(&self.backend, ctx_params)?;
 
-        let mut batch = LlamaBatch::new(n_ctx as usize, 1);
-        batch.add_sequence(&tokens, 0, false)?;
-        ctx.decode(&mut batch)?;
+        let chunk_size = 512;
+        let mut batch = LlamaBatch::new(chunk_size, 1);
+        let total_tokens = tokens.len();
+        for (chunk_idx, chunk) in tokens.chunks(chunk_size).enumerate() {
+            batch.clear();
+            let start_pos = chunk_idx * chunk_size;
+            let is_last_chunk = start_pos + chunk.len() == total_tokens;
+            for (i, token) in chunk.iter().enumerate() {
+                let pos = (start_pos + i) as i32;
+                let need_logits = is_last_chunk && (i == chunk.len() - 1);
+                batch.add(*token, pos, &[0], need_logits)?;
+            }
+            ctx.decode(&mut batch)?;
+        }
 
         let mut samplers = Vec::new();
         if let Some(g) = grammar {
